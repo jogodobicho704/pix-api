@@ -1,168 +1,103 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
 header("Content-Type: application/json");
 
-// =====================
-// CONFIG FIXA
-// =====================
-$AMOUNT = 2163;
-$OFFER_HASH = "Z-19RN101IFI26";
-$PRODUCT_HASH = "mstjydnuad";
-$PRODUCT_NAME = "Seguro Prestamista";
+// ================= CONFIG =================
+$PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN"); // definido no Railway
+$API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
 
-// =====================
-// TOKEN PLUMIFY
-// =====================
-$TOKEN = getenv("PLUMIFY_TOKEN");
-if (!$TOKEN) {
-    http_response_code(500);
-    echo json_encode(["erro" => "Token Plumify não configurado"]);
-    exit;
-}
+// ================= INPUT (Sendbot) =================
+$amount = 2163; // valor em centavos
+$offer_hash = "Z-19RN101IFI26";
+$product_hash = "mstjydnuad";
 
-// =====================
-// DADOS DO SENDBOT
-// =====================
-$name  = $_GET["name"]  ?? "Cliente Pix";
-$email = $_GET["email"] ?? "cliente@email.com";
-$phone = $_GET["phone"] ?? "11999999999";
-$doc   = $_GET["document"] ?? "00000000000";
-
-// =====================
-// UTMs (APENAS AS 5)
-// =====================
-$tracking = [
-    "utm_source"   => $_GET["utm_source"]   ?? "",
-    "utm_medium"   => $_GET["utm_medium"]   ?? "",
-    "utm_campaign" => $_GET["utm_campaign"] ?? "",
-    "utm_term"     => $_GET["utm_term"]     ?? "",
-    "utm_content"  => $_GET["utm_content"]  ?? ""
+// dados do cliente (exemplo + fallback)
+$customer = [
+    "name" => $_REQUEST["name"] ?? "Joao Silva",
+    "email" => $_REQUEST["email"] ?? "joao@email.com",
+    "phone_number" => $_REQUEST["phone"] ?? "11999999999",
+    "document" => $_REQUEST["document"] ?? "45780681880"
 ];
 
-// =====================
-// CRIA TRANSAÇÃO
-// =====================
+// UTM (somente as 5 do Face)
+$tracking = [
+    "utm_source"   => $_REQUEST["utm_source"]   ?? null,
+    "utm_campaign" => $_REQUEST["utm_campaign"] ?? null,
+    "utm_medium"   => $_REQUEST["utm_medium"]   ?? null,
+    "utm_term"     => $_REQUEST["utm_term"]     ?? null,
+    "utm_content"  => $_REQUEST["utm_content"]  ?? null
+];
+
+// ================= PAYLOAD =================
 $payload = [
-    "api_token" => $TOKEN,
-    "amount" => $AMOUNT,
-    "offer_hash" => $OFFER_HASH,
+    "amount" => $amount,
+    "offer_hash" => $offer_hash,
     "payment_method" => "pix",
-
-    "customer" => [
-        "name" => $name,
-        "email" => $email,
-        "phone_number" => $phone,
-        "document" => $doc
-    ],
-
+    "customer" => $customer,
     "cart" => [
         [
-            "product_hash" => $PRODUCT_HASH,
-            "title" => $PRODUCT_NAME,
-            "price" => $AMOUNT,
+            "product_hash" => $product_hash,
+            "title" => "Seguro Prestamista",
+            "price" => $amount,
             "quantity" => 1,
             "operation_type" => 1,
             "tangible" => false
         ]
     ],
-
-    "transaction_origin" => "api",
     "tracking" => $tracking
 ];
 
-$createUrl = "https://api.plumify.com.br/api/public/v1/transactions";
-
-$ch = curl_init($createUrl);
+// ================= CURL =================
+$ch = curl_init();
 curl_setopt_array($ch, [
+    CURLOPT_URL => $API_URL . "?api_token=" . $PLUMIFY_TOKEN,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
         "Content-Type: application/json",
         "Accept: application/json"
     ],
-    CURLOPT_POSTFIELDS => json_encode($payload),
-    CURLOPT_TIMEOUT => 15
+    CURLOPT_POSTFIELDS => json_encode($payload)
 ]);
 
 $response = curl_exec($ch);
-
-if ($response === false) {
-    echo json_encode(["erro" => curl_error($ch)]);
-    exit;
-}
-
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
 curl_close($ch);
-$result = json_decode($response, true);
 
-// =====================
-// IDENTIFICAR ID DA TRANSAÇÃO
-// =====================
-if (!isset($result["success"]) || $result["success"] !== true) {
+// ================= ERRO DE CONEXÃO =================
+if ($httpCode >= 400 || !$response) {
     echo json_encode([
-        "erro" => "Plumify recusou a transação",
-        "plumify_response" => $result
+        "erro" => "Falha ao chamar Plumify",
+        "http_code" => $httpCode,
+        "curl_error" => $curlError,
+        "response_raw" => $response
     ]);
     exit;
 }
 
-$transactionId =
-    $result["data"]["id"] ??
-    $result["data"]["transaction_id"] ??
-    $result["data"]["reference"] ??
-    null;
+// ================= DECODE =================
+$result = json_decode($response, true);
 
-if (!$transactionId) {
+// ================= VALIDAÇÃO REAL (PLUMIFY) =================
+if (!isset($result["id"]) || !isset($result["payment_status"])) {
     echo json_encode([
-        "erro" => "ID da transação não retornado",
+        "erro" => "Transação não criada",
         "debug" => $result
     ]);
     exit;
 }
 
-// =====================
-// POLLING – CONSULTA PIX
-// =====================
-$pixCode = null;
-$pixQr   = null;
+// ================= EXTRAÇÃO DO PIX =================
+$pix_copia_e_cola = $result["pix"]["pix_qr_code"] ?? null;
+$pix_qr_code      = $result["pix"]["pix_url"] ?? null;
+$pix_base64       = $result["pix"]["qr_code_base64"] ?? null;
 
-for ($i = 0; $i < 5; $i++) { // tenta por até ~5 segundos
-    sleep(1);
-
-    $getUrl = "https://api.plumify.com.br/api/public/v1/transactions/$transactionId?api_token=$TOKEN";
-
-    $ch = curl_init($getUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10
-    ]);
-
-    $check = curl_exec($ch);
-    curl_close($ch);
-
-    $checkResult = json_decode($check, true);
-
-    if (!empty($checkResult["data"]["data"])) {
-        foreach ($checkResult["data"]["data"] as $item) {
-            if (
-                isset($item["pix"]) &&
-                !empty($item["pix"]["pix_code"]) &&
-                !empty($item["pix"]["pix_qr_code"])
-            ) {
-                $pixCode = $item["pix"]["pix_code"];
-                $pixQr   = $item["pix"]["pix_qr_code"];
-                break 2;
-            }
-        }
-    }
-}
-
-// =====================
-// RETORNO SENDBOT
-// =====================
+// ================= RESPOSTA PARA O SENDBOT =================
 echo json_encode([
-    "pix_copia_e_cola" => $pixCode,
-    "pix_qr_code"      => $pixQr,
-    "transaction_id"  => $transactionId
+    "transaction_id"   => $result["id"],
+    "payment_status"   => $result["payment_status"],
+    "pix_copia_e_cola" => $pix_copia_e_cola,
+    "pix_qr_code"      => $pix_qr_code,
+    "pix_base64"       => $pix_base64
 ]);
 exit;
