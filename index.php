@@ -123,9 +123,18 @@ if ($httpCode < 200 || $httpCode >= 300) {
 $pixCode = null;
 $pixQr   = null;
 
-if (!empty($result["data"]["data"][0]["pix"])) {
-    $pixCode = $result["data"]["data"][0]["pix"]["pix_code"] ?? null;
-    $pixQr   = $result["data"]["data"][0]["pix"]["pix_qr_code"] ?? null;
+if (!empty($result["data"]["data"]) && is_array($result["data"]["data"])) {
+    foreach ($result["data"]["data"] as $item) {
+        if (
+            isset($item["pix"]) &&
+            !empty($item["pix"]["pix_code"]) &&
+            !empty($item["pix"]["pix_qr_code"])
+        ) {
+            $pixCode = $item["pix"]["pix_code"];
+            $pixQr   = $item["pix"]["pix_qr_code"];
+            break; // primeiro adquirente válido
+        }
+    }
 }
 
 // =====================
