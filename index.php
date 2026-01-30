@@ -13,7 +13,7 @@ if (!$token) {
 }
 
 // Endpoint correto
-$url = "https://api.plumify.com.br/api/public/v1/transactions?api_token=H0uDeO6yO5F2RFGVSrloOF2KNB3dj7NSKDi9fX7qIf7Cq1YEiv9vITWE8QSu" . $token;
+$url = "https://api.plumify.com.br/api/public/v1/transactions?api_token=" . $token;
 
 // Payload em ARRAY (PHP)
 $payload = [
