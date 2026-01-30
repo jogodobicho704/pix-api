@@ -93,11 +93,13 @@ $pix_qr_code      = $result["pix"]["pix_url"] ?? null;
 $pix_base64       = $result["pix"]["qr_code_base64"] ?? null;
 
 // ================= RESPOSTA PARA O SENDBOT =================
+header('Content-Type: application/json');
+
 echo json_encode([
-    "transaction_id"   => $result["id"],
-    "payment_status"   => $result["payment_status"],
-    "pix_copia_e_cola" => $pix_copia_e_cola,
-    "pix_qr_code"      => $pix_qr_code,
-    "pix_base64"       => $pix_base64
+  "transaction_id"   => $result['data']['transaction_id'] ?? null,
+  "pix_copia_e_cola" => $result['data']['pix_copia_e_cola'] ?? null,
+  "pix_qr_code"      => $result['data']['pix_qr_code'] ?? null,
+  "pix_base64"       => $result['data']['pix_base64'] ?? null
 ]);
+
 exit;
