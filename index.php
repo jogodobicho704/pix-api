@@ -1,108 +1,150 @@
 <?php
 header("Content-Type: application/json");
 
-// ================= CONFIGURAÇÃO =================
-$PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN"); // Token Plumify
-$META_PIXEL_ID = "1585550522686553";      // Pixel Meta
-$META_TOKEN    = "EAARFzDZBZCLZBgBQjzjnKheWdamhmwPCo1CNueZAULNegkQbXEDYK1lJYHctFxJO7NiN5zVB52lAeghqBYgtXI7TDqVvp7P9l2S6wiLsAY27ZC1FkoubuFZCVKj2dEZCWeC9y8JyCFqO6Qgcl8N5NwjKbGaaJSOs8F0ooXyz6y53kZAiBWizvCA6nezbnPjf5AZDZD";
+// ================= CONFIG =================
+$PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN");
+$API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
+$META_PIXEL_ID = "1585550522686553";
+$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQjzjnKheWdamhmwPCo1CNueZAULNegkQbXEDYK1lJYHctFxJO7NiN5zVB52lAeghqBYgtXI7TDqVvp7P9l2S6wiLsAY27ZC1FkoubuFZCVKj2dEZCWeC9y8JyCFqO6Qgcl8N5NwjKbGaaJSOs8F0ooXyz6y53kZAiBWizvCA6nezbnPjf5AZDZD";
 
-// ================= RECEBENDO PAYLOAD =================
-$input = file_get_contents("php://input");
-$payload = json_decode($input, true);
+// ================= INPUT =================
+$amount = 2163; // centavos
+$offer_hash = "Z-19RN101IFI26";
+$product_hash = "mstjydnuad";
 
-// fallback caso venha via form-urlencoded
-if (!$payload && !empty($_POST)) {
-    $payload = $_POST;
-}
+$customer = [
+    "name" => $_REQUEST["name"] ?? "Joao Silva",
+    "email" => $_REQUEST["email"] ?? "joao@email.com",
+    "phone_number" => $_REQUEST["phone"] ?? "11999999999",
+    "document" => $_REQUEST["document"] ?? "45780681880"
+];
 
-if (!$payload) {
-    http_response_code(400);
-    echo json_encode(["error" => "Payload inválido"]);
+$tracking = [
+    "utm_source"   => $_REQUEST["utm_source"] ?? null,
+    "utm_campaign" => $_REQUEST["utm_campaign"] ?? null,
+    "utm_medium"   => $_REQUEST["utm_medium"] ?? null,
+    "utm_term"     => $_REQUEST["utm_term"] ?? null,
+    "utm_content"  => $_REQUEST["utm_content"] ?? null
+];
+
+// ================= PAYLOAD PLUMIFY =================
+$payload = [
+    "amount" => $amount,
+    "offer_hash" => $offer_hash,
+    "payment_method" => "pix",
+    "customer" => $customer,
+    "cart" => [
+        [
+            "product_hash" => $product_hash,
+            "title" => "Seguro Prestamista",
+            "price" => $amount,
+            "quantity" => 1,
+            "operation_type" => 1,
+            "tangible" => false
+        ]
+    ],
+    "tracking" => $tracking
+];
+
+// ================= CURL PLUMIFY =================
+$ch = curl_init();
+curl_setopt_array($ch, [
+    CURLOPT_URL => $API_URL . "?api_token=" . $PLUMIFY_TOKEN,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        "Content-Type: application/json",
+        "Accept: application/json"
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload)
+]);
+
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
+curl_close($ch);
+
+if ($httpCode >= 400 || !$response) {
+    echo json_encode([
+        "erro" => "Falha ao chamar Plumify",
+        "http_code" => $httpCode,
+        "curl_error" => $curlError,
+        "response_raw" => $response
+    ]);
     exit;
 }
 
-// ================= EXTRAÇÃO DOS DADOS =================
-$result = $payload; // Plumify envia dados da transação
+$result = json_decode($response, true);
 
-$transaction_id   = $result["id"] ?? null;
-$payment_status   = $result["payment_status"] ?? null;
-$amount           = $result["amount"] ?? 0;
+if (!isset($result["id"]) || !isset($result["payment_status"])) {
+    echo json_encode([
+        "erro" => "Transação não criada",
+        "debug" => $result
+    ]);
+    exit;
+}
+
+// ================= EXTRAÇÃO PIX =================
 $pix_copia_e_cola = $result["pix"]["pix_qr_code"] ?? null;
-$pix_qr_code      = $result["pix"]["pix_url"] ?? null;
-$pix_base64       = $result["pix"]["qr_code_base64"] ?? null;
+$pix_qr_code = $result["pix"]["pix_url"] ?? null;
+$pix_base64 = $result["pix"]["qr_code_base64"] ?? null;
 
-// UTM
-$tracking = $result["tracking"] ?? [
-    "utm_source"   => null,
-    "utm_campaign" => null,
-    "utm_medium"   => null,
-    "utm_term"     => null,
-    "utm_content"  => null
+// ================= RESPOSTA PLUMIFY =================
+$responseData = [
+    "transaction_id" => $result["id"],
+    "payment_status" => $result["payment_status"],
+    "pix_copia_e_cola" => $pix_copia_e_cola,
+    "pix_qr_code" => $pix_qr_code,
+    "pix_base64" => $pix_base64
 ];
 
-// Dados do cliente
-$customer = $result["customer"] ?? [
-    "name"         => null,
-    "email"        => null,
-    "phone_number" => null,
-    "document"     => null
-];
+// ================= DISPARO META CAPI =================
+if ($result["payment_status"] === "paid") {
+    $user_data = [
+        "em" => hash('sha256', strtolower(trim($customer["email"]))),
+        "ph" => hash('sha256', preg_replace('/\D/', '', $customer["phone_number"]))
+    ];
 
-// ================= ENVIO META CAPI =================
-$user_data = [
-    "em"  => hash('sha256', strtolower($customer["email"] ?? "")),
-    "ph"  => hash('sha256', preg_replace("/\D/", "", $customer["phone_number"] ?? "")),
-];
-
-$meta_payload = [
-    "data" => [
-        [
-            "event_name" => "Purchase",
-            "event_time" => time(),
-            "event_id"   => $transaction_id,
-            "user_data"  => $user_data,
-            "custom_data" => [
-                "currency"          => "BRL",
-                "value"             => $amount / 100,
-                "pix_copia_e_cola"  => $pix_copia_e_cola,
-                "pix_qr_code"       => $pix_qr_code,
-                "utm_source"        => $tracking['utm_source'] ?? null,
-                "utm_campaign"      => $tracking['utm_campaign'] ?? null,
-                "utm_medium"        => $tracking['utm_medium'] ?? null,
-                "utm_content"       => $tracking['utm_content'] ?? null,
-                "utm_term"          => $tracking['utm_term'] ?? null
-            ],
-            "action_source" => "website"
+    $capi_payload = [
+        "data" => [
+            [
+                "event_name" => "Purchase",
+                "event_time" => time(),
+                "event_id" => $result["id"],
+                "user_data" => $user_data,
+                "custom_data" => [
+                    "currency" => "BRL",
+                    "value" => $amount / 100,
+                    "pix_qr_code" => $pix_qr_code,
+                    "pix_copia_e_cola" => $pix_copia_e_cola,
+                    "utm_source" => $tracking['utm_source']
+                ]
+            ]
         ]
-    ]
-];
+    ];
 
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL            => "https://graph.facebook.com/v17.0/$META_PIXEL_ID/events?access_token=$META_TOKEN",
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_HTTPHEADER     => ["Content-Type: application/json"],
-    CURLOPT_POSTFIELDS     => json_encode($meta_payload)
-]);
+    $chMeta = curl_init();
+    curl_setopt_array($chMeta, [
+        CURLOPT_URL => "https://graph.facebook.com/v15.0/{$META_PIXEL_ID}/events?access_token={$META_ACCESS_TOKEN}",
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
+        CURLOPT_POSTFIELDS => json_encode($capi_payload)
+    ]);
 
-$meta_response = curl_exec($ch);
-$meta_http     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$meta_error    = curl_error($ch);
-curl_close($ch);
+    $meta_response = curl_exec($chMeta);
+    $meta_http = curl_getinfo($chMeta, CURLINFO_HTTP_CODE);
+    $meta_error = curl_error($chMeta);
+    curl_close($chMeta);
 
-// ================= RESPOSTA PARA O SENDBOT =================
+    $responseData["meta_capi_http"] = $meta_http;
+    $responseData["meta_capi_response"] = $meta_response;
+    $responseData["meta_curl_error"] = $meta_error;
+}
+
+// ================= RETORNO =================
 echo json_encode([
-    "statusCode"        => 200,
-    "data" => [
-        "transaction_id"   => $transaction_id,
-        "payment_status"   => $payment_status,
-        "pix_copia_e_cola" => $pix_copia_e_cola,
-        "pix_qr_code"      => $pix_qr_code,
-        "pix_base64"       => $pix_base64,
-        "meta_capi_http"   => $meta_http,
-        "meta_capi_response" => $meta_response,
-        "meta_curl_error"  => $meta_error
-    ]
+    "statusCode" => 200,
+    "data" => $responseData
 ]);
 exit;
