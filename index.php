@@ -98,6 +98,14 @@ $result = json_decode($response, true);
 // =====================
 // IDENTIFICAR ID DA TRANSAÇÃO
 // =====================
+if (!isset($result["success"]) || $result["success"] !== true) {
+    echo json_encode([
+        "erro" => "Plumify recusou a transação",
+        "plumify_response" => $result
+    ]);
+    exit;
+}
+
 $transactionId =
     $result["data"]["id"] ??
     $result["data"]["transaction_id"] ??
