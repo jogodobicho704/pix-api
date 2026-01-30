@@ -72,7 +72,7 @@ $payload = [
 // =====================
 // REQUEST PARA PLUMIFY
 // =====================
-$ch = curl_init("https://api.plumify.com.br/v1/transactions");
+$ch = curl_init("https://api.plumify.com.br/v1/checkout");
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
