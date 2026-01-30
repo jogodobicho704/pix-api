@@ -95,17 +95,12 @@ $pix_base64       = $result["pix"]["qr_code_base64"] ?? null;
 // ================= RESPOSTA PARA O SENDBOT =================
 header('Content-Type: application/json');
 
-// Extrai do primeiro adquirente / primeira transação
-$transaction_id   = $result['data']['id'] ?? null;
-$pix_copia_e_cola = $result['data']['pix']['pix_copia_e_cola'] ?? null;
-$pix_qr_code      = $result['data']['pix']['pix_qr_code'] ?? null;
-$pix_base64       = $result['data']['pix']['qr_code_base64'] ?? null;
-
 echo json_encode([
-    "transaction_id"   => $transaction_id,
-    "pix_copia_e_cola" => $pix_copia_e_cola,
-    "pix_qr_code"      => $pix_qr_code,
-    "pix_base64"       => $pix_base64
+    "transaction_id"   => $result['data']['id'] ?? null,
+    "payment_status"   => $result['data']['payment_status'] ?? null,
+    "pix_copia_e_cola" => $result['data']['pix']['pix_copia_e_cola'] ?? null,
+    "pix_qr_code"      => $result['data']['pix']['pix_qr_code'] ?? null,
+    "pix_base64"       => $result['data']['pix']['qr_code_base64'] ?? null
 ]);
 
 exit;
