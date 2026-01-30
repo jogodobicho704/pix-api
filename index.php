@@ -30,20 +30,21 @@ $phone = $_GET["phone"] ?? "11999999999";
 $doc   = $_GET["document"] ?? "00000000000";
 
 // =====================
-// UTMs (SEND + META + GOOGLE)
+// UTMs (FACEBOOK - APENAS AS NECESSÁRIAS)
 // =====================
 $tracking = [
-    "utm_source"    => $_GET["utm_source"] ?? "",
-    "utm_medium"    => $_GET["utm_medium"] ?? "",
-    "utm_campaign"  => $_GET["utm_campaign"] ?? "",
-    "utm_term"      => $_GET["utm_term"] ?? "",
-    "utm_content"   => $_GET["utm_content"] ?? ""
+    "utm_source"   => $_GET["utm_source"]   ?? "",
+    "utm_medium"   => $_GET["utm_medium"]   ?? "",
+    "utm_campaign" => $_GET["utm_campaign"] ?? "",
+    "utm_term"     => $_GET["utm_term"]     ?? "",
+    "utm_content"  => $_GET["utm_content"]  ?? ""
 ];
 
 // =====================
 // PAYLOAD PLUMIFY
 // =====================
 $payload = [
+    "api_token" => $TOKEN,
     "amount" => $AMOUNT,
     "offer_hash" => $OFFER_HASH,
     "payment_method" => "pix",
@@ -81,8 +82,7 @@ curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
         "Content-Type: application/json",
-        "Accept: application/json",
-        "Authorization: Bearer $TOKEN"
+        "Accept: application/json"
     ],
     CURLOPT_POSTFIELDS => json_encode($payload),
     CURLOPT_TIMEOUT => 15
@@ -118,37 +118,14 @@ if ($httpCode < 200 || $httpCode >= 300) {
 }
 
 // =====================
-// EXTRAIR PIX (MULTI-ADQUIRENTE)
+// EXTRAIR PIX — PRIMEIRO ADQUIRENTE
 // =====================
 $pixCode = null;
 $pixQr   = null;
 
-// payments[]
-if (!empty($result["data"]["payments"])) {
-    foreach ($result["data"]["payments"] as $payment) {
-        if (($payment["method"] ?? "") === "pix" && !empty($payment["pix"])) {
-            $pixCode = $payment["pix"]["code"] ?? null;
-            $pixQr   = $payment["pix"]["qr_code"] ?? null;
-            break;
-        }
-    }
-}
-
-// charges[]
-if ((!$pixCode || !$pixQr) && !empty($result["data"]["charges"])) {
-    foreach ($result["data"]["charges"] as $charge) {
-        if (($charge["payment_method"] ?? "") === "pix") {
-            $pixCode = $charge["pix_code"] ?? null;
-            $pixQr   = $charge["pix_qr_code"] ?? null;
-            break;
-        }
-    }
-}
-
-// fallback direto
-if (!$pixCode && isset($result["data"]["pix"]["code"])) {
-    $pixCode = $result["data"]["pix"]["code"];
-    $pixQr   = $result["data"]["pix"]["qr_code"] ?? null;
+if (!empty($result["data"]["data"][0]["pix"])) {
+    $pixCode = $result["data"]["data"][0]["pix"]["pix_code"] ?? null;
+    $pixQr   = $result["data"]["data"][0]["pix"]["pix_qr_code"] ?? null;
 }
 
 // =====================
