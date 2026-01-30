@@ -1,10 +1,15 @@
-if ($httpCode >= 400 || !$response) {
-    http_response_code(500);
+<?php
+
+header("Content-Type: application/json");
+
+if (isset($_GET['test'])) {
     echo json_encode([
-        "erro" => "Falha ao chamar Plumify",
-        "http_code" => $httpCode,
-        "curl_error" => curl_error($ch),
-        "response_raw" => $response
+        "status" => "online",
+        "php" => phpversion()
     ]);
     exit;
 }
+
+echo json_encode([
+    "msg" => "endpoint ativo"
+]);
