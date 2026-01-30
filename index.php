@@ -90,7 +90,11 @@ curl_close($ch);
 
 if ($httpCode >= 400 || !$response) {
     http_response_code(500);
-    echo json_encode(["error" => "Erro ao gerar Pix"]);
+    echo json_encode([
+        "erro" => "Falha ao chamar Plumify",
+        "http_code" => $httpCode,
+        "response_raw" => $response
+    ]);
     exit;
 }
 
