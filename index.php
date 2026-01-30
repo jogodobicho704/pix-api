@@ -18,7 +18,7 @@ $customer = [
     "document" => $_REQUEST["document"] ?? "45780681880"
 ];
 
-// UTM (somente as 5 do Face)
+// UTM (somente as 5 do Facebook)
 $tracking = [
     "utm_source"   => $_REQUEST["utm_source"]   ?? null,
     "utm_campaign" => $_REQUEST["utm_campaign"] ?? null,
@@ -78,8 +78,8 @@ if ($httpCode >= 400 || !$response) {
 // ================= DECODE =================
 $result = json_decode($response, true);
 
-// ================= VALIDAÇÃO REAL (PLUMIFY) =================
-if (!isset($result["id"]) || !isset($result["payment_status"])) {
+// ================= VALIDAÇÃO =================
+if (!isset($result["data"]["id"]) || !isset($result["data"]["payment_status"])) {
     echo json_encode([
         "erro" => "Transação não criada",
         "debug" => $result
@@ -88,19 +88,18 @@ if (!isset($result["id"]) || !isset($result["payment_status"])) {
 }
 
 // ================= EXTRAÇÃO DO PIX =================
-$pix_copia_e_cola = $result["pix"]["pix_qr_code"] ?? null;
-$pix_qr_code      = $result["pix"]["pix_url"] ?? null;
-$pix_base64       = $result["pix"]["qr_code_base64"] ?? null;
+$transaction_id   = $result["data"]["id"];
+$payment_status   = $result["data"]["payment_status"];
+$pix_copia_e_cola = $result["data"]["pix"]["pix_copia_e_cola"] ?? null;
+$pix_qr_code      = $result["data"]["pix"]["pix_qr_code"] ?? null;
+$pix_base64       = $result["data"]["pix"]["qr_code_base64"] ?? null;
 
 // ================= RESPOSTA PARA O SENDBOT =================
-header('Content-Type: application/json');
-
 echo json_encode([
-    "transaction_id"   => $result['data']['id'] ?? null,
-    "payment_status"   => $result['data']['payment_status'] ?? null,
-    "pix_copia_e_cola" => $result['data']['pix']['pix_copia_e_cola'] ?? null,
-    "pix_qr_code"      => $result['data']['pix']['pix_qr_code'] ?? null,
-    "pix_base64"       => $result['data']['pix']['qr_code_base64'] ?? null
+    "transaction_id"   => $transaction_id,
+    "payment_status"   => $payment_status,
+    "pix_copia_e_cola" => $pix_copia_e_cola,
+    "pix_qr_code"      => $pix_qr_code,
+    "pix_base64"       => $pix_base64
 ]);
-
 exit;
