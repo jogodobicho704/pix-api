@@ -72,13 +72,18 @@ $payload = [
 // =====================
 // REQUEST PARA PLUMIFY
 // =====================
-$ch = curl_init("https://api.plumify.com.br/v1/checkout");
+$endpoint = "https://api.plumify.com.br/checkout";
+
+$ch = curl_init($endpoint);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
-        "Authorization: Bearer $TOKEN",
+        "Authorization: Bearer H0uDeO6yO5F2RFGVSrloOF2KNB3dj7NSKDi9fX7qIf7Cq1YEiv9vITWE8QSu",
         "Content-Type: application/json"
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload)
+]);
     ],
     CURLOPT_POSTFIELDS => json_encode($payload),
     CURLOPT_TIMEOUT => 10
