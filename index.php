@@ -3,42 +3,77 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 header("Content-Type: application/json");
 
-// TOKEN vindo do Railway
-$token = getenv("PLUMIFY_TOKEN");
+// =====================
+// CONFIG FIXA
+// =====================
+$AMOUNT = 2163;
+$OFFER_HASH = "Z-19RN101IFI26";
+$PRODUCT_HASH = "mstjydnuad";
+$PRODUCT_NAME = "Seguro Prestamista";
 
-if (!$token) {
+// =====================
+// TOKEN PLUMIFY (Railway)
+// =====================
+$TOKEN = getenv("PLUMIFY_TOKEN");
+if (!$TOKEN) {
     http_response_code(500);
     echo json_encode(["erro" => "Token Plumify não configurado"]);
     exit;
 }
 
-// Endpoint correto
-$url = "https://api.plumify.com.br/api/public/v1/transactions?api_token=" . $token;
+// =====================
+// DADOS DO SENDBOT
+// =====================
+$name  = $_GET["name"]  ?? "Cliente Pix";
+$email = $_GET["email"] ?? "cliente@email.com";
+$phone = $_GET["phone"] ?? "11999999999";
+$doc   = $_GET["document"] ?? "00000000000";
 
-// Payload em ARRAY (PHP)
+// =====================
+// UTMs (SEND + META + GOOGLE)
+// =====================
+$tracking = [
+    "utm_source"    => $_GET["utm_source"] ?? "",
+    "utm_medium"    => $_GET["utm_medium"] ?? "",
+    "utm_campaign"  => $_GET["utm_campaign"] ?? "",
+    "utm_term"      => $_GET["utm_term"] ?? "",
+    "utm_content"   => $_GET["utm_content"] ?? ""
+];
+
+// =====================
+// PAYLOAD PLUMIFY
+// =====================
 $payload = [
-    "amount" => 2163,
-    "offer_hash" => "Z-19RN101IFI26",
+    "amount" => $AMOUNT,
+    "offer_hash" => $OFFER_HASH,
     "payment_method" => "pix",
 
     "customer" => [
-        "name" => $_GET["name"] ?? "Cliente Pix",
-        "email" => $_GET["email"] ?? "cliente@email.com",
-        "phone_number" => $_GET["phone"] ?? "11999999999",
-        "document" => $_GET["document"] ?? "00000000000"
+        "name" => $name,
+        "email" => $email,
+        "phone_number" => $phone,
+        "document" => $doc
     ],
 
     "cart" => [
         [
-            "product_hash" => "mstjydnuad",
-            "title" => "Seguro Prestamista",
-            "price" => 2163,
+            "product_hash" => $PRODUCT_HASH,
+            "title" => $PRODUCT_NAME,
+            "price" => $AMOUNT,
             "quantity" => 1,
             "operation_type" => 1,
             "tangible" => false
         ]
-    ]
+    ],
+
+    "transaction_origin" => "api",
+    "tracking" => $tracking
 ];
+
+// =====================
+// REQUEST PLUMIFY
+// =====================
+$url = "https://api.plumify.com.br/api/public/v1/transactions";
 
 $ch = curl_init($url);
 curl_setopt_array($ch, [
@@ -46,28 +81,34 @@ curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
         "Content-Type: application/json",
-        "Accept: application/json"
+        "Accept: application/json",
+        "Authorization: Bearer $TOKEN"
     ],
     CURLOPT_POSTFIELDS => json_encode($payload),
+    CURLOPT_TIMEOUT => 15
 ]);
 
 $response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 if ($response === false) {
+    http_response_code(500);
     echo json_encode([
-        "erro" => "Erro no cURL",
+        "erro" => "Erro cURL",
         "curl_error" => curl_error($ch)
     ]);
     exit;
 }
 
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 $result = json_decode($response, true);
 
-// Se deu erro na API
+// =====================
+// ERRO PLUMIFY
+// =====================
 if ($httpCode < 200 || $httpCode >= 300) {
+    http_response_code(500);
     echo json_encode([
         "erro" => "Erro Plumify",
         "http_code" => $httpCode,
@@ -76,11 +117,46 @@ if ($httpCode < 200 || $httpCode >= 300) {
     exit;
 }
 
-/*
-  ⬇️ RETORNAMOS APENAS O PIX (Sendbot friendly)
-*/
+// =====================
+// EXTRAIR PIX (MULTI-ADQUIRENTE)
+// =====================
+$pixCode = null;
+$pixQr   = null;
+
+// payments[]
+if (!empty($result["data"]["payments"])) {
+    foreach ($result["data"]["payments"] as $payment) {
+        if (($payment["method"] ?? "") === "pix" && !empty($payment["pix"])) {
+            $pixCode = $payment["pix"]["code"] ?? null;
+            $pixQr   = $payment["pix"]["qr_code"] ?? null;
+            break;
+        }
+    }
+}
+
+// charges[]
+if ((!$pixCode || !$pixQr) && !empty($result["data"]["charges"])) {
+    foreach ($result["data"]["charges"] as $charge) {
+        if (($charge["payment_method"] ?? "") === "pix") {
+            $pixCode = $charge["pix_code"] ?? null;
+            $pixQr   = $charge["pix_qr_code"] ?? null;
+            break;
+        }
+    }
+}
+
+// fallback direto
+if (!$pixCode && isset($result["data"]["pix"]["code"])) {
+    $pixCode = $result["data"]["pix"]["code"];
+    $pixQr   = $result["data"]["pix"]["qr_code"] ?? null;
+}
+
+// =====================
+// RETORNO FINAL SENDBOT
+// =====================
 echo json_encode([
-    "pix_qr_code" => $result["data"]["pix"]["qr_code"] ?? null,
-    "pix_copia_e_cola" => $result["data"]["pix"]["code"] ?? null,
-    "transaction_id" => $result["data"]["id"] ?? null
+    "pix_copia_e_cola" => $pixCode,
+    "pix_qr_code"      => $pixQr,
+    "transaction_id"  => $result["data"]["id"] ?? null
 ]);
+exit;
