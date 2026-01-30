@@ -5,12 +5,11 @@ header("Content-Type: application/json");
 $PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN"); // definido no Railway
 $API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
 
-// ================= INPUT (Sendbot) =================
+// ================= INPUT =================
 $amount = 2163; // valor em centavos
 $offer_hash = "Z-19RN101IFI26";
 $product_hash = "mstjydnuad";
 
-// dados do cliente (exemplo + fallback)
 $customer = [
     "name" => $_REQUEST["name"] ?? "Joao Silva",
     "email" => $_REQUEST["email"] ?? "joao@email.com",
@@ -18,7 +17,7 @@ $customer = [
     "document" => $_REQUEST["document"] ?? "45780681880"
 ];
 
-// UTM (somente as 5 do Facebook)
+// UTM (apenas as 5 do Facebook)
 $tracking = [
     "utm_source"   => $_REQUEST["utm_source"]   ?? null,
     "utm_campaign" => $_REQUEST["utm_campaign"] ?? null,
@@ -79,7 +78,7 @@ if ($httpCode >= 400 || !$response) {
 $result = json_decode($response, true);
 
 // ================= VALIDAÇÃO =================
-if (!isset($result["data"]["id"]) || !isset($result["data"]["payment_status"])) {
+if (!isset($result["data"])) {
     echo json_encode([
         "erro" => "Transação não criada",
         "debug" => $result
@@ -88,18 +87,20 @@ if (!isset($result["data"]["id"]) || !isset($result["data"]["payment_status"])) 
 }
 
 // ================= EXTRAÇÃO DO PIX =================
-$transaction_id   = $result["data"]["id"];
-$payment_status   = $result["data"]["payment_status"];
-$pix_copia_e_cola = $result["data"]["pix"]["pix_copia_e_cola"] ?? null;
-$pix_qr_code      = $result["data"]["pix"]["pix_qr_code"] ?? null;
-$pix_base64       = $result["data"]["pix"]["qr_code_base64"] ?? null;
+$data = $result["data"];
 
-// ================= RESPOSTA PARA O SENDBOT =================
+$transaction_id   = $data["id"] ?? null;
+$payment_status   = $data["payment_status"] ?? null;
+$pix_copia_e_cola = $data["pix"]["pix_qr_code"] ?? null;
+$pix_qr_code      = $data["pix"]["pix_url"] ?? null;
+$pix_base64       = $data["pix"]["qr_code_base64"] ?? null;
+
+// ================= RESPOSTA =================
 echo json_encode([
     "transaction_id"   => $transaction_id,
     "payment_status"   => $payment_status,
     "pix_copia_e_cola" => $pix_copia_e_cola,
     "pix_qr_code"      => $pix_qr_code,
     "pix_base64"       => $pix_base64
-]);
+], JSON_PRETTY_PRINT);
 exit;
