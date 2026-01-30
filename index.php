@@ -1,115 +1,86 @@
 <?php
-
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 header("Content-Type: application/json");
 
-// =====================
-// CONFIG FIXA DO PRODUTO
-// =====================
-$AMOUNT = 2163; // centavos (R$21,63)
-$OFFER_HASH = "Z-19RN101IFI26";
-$PRODUCT_HASH = "mstjydnuad";
-$PRODUCT_NAME = "Seguro Prestamista";
+// TOKEN vindo do Railway
+$token = getenv("PLUMIFY_TOKEN");
 
-// =====================
-// TOKEN
-// =====================
-$TOKEN = getenv("PLUMIFY_TOKEN");
-if (!$TOKEN) {
+if (!$token) {
     http_response_code(500);
-    echo json_encode(["error" => "Token Plumify não configurado"]);
+    echo json_encode(["erro" => "Token Plumify não configurado"]);
     exit;
 }
 
-// =====================
-// DADOS VIA GET (SENDBOT)
-// =====================
-$name  = $_GET['name']  ?? "Cliente";
-$email = $_GET['email'] ?? "cliente@email.com";
-$phone = $_GET['phone'] ?? "51999999999";
-$doc   = $_GET['doc']   ?? "00000000000";
+// Endpoint correto
+$url = "https://api.plumify.com.br/api/public/v1/transactions?api_token=H0uDeO6yO5F2RFGVSrloOF2KNB3dj7NSKDi9fX7qIf7Cq1YEiv9vITWE8QSu" . $token;
 
-// UTMs (opcional)
-$utm_source   = $_GET['utm_source']   ?? "";
-$utm_medium   = $_GET['utm_medium']   ?? "";
-$utm_campaign = $_GET['utm_campaign'] ?? "";
-$utm_term     = $_GET['utm_term']     ?? "";
-$utm_content  = $_GET['utm_content']  ?? "";
-
-// =====================
-// PAYLOAD PLUMIFY
-// =====================
+// Payload em ARRAY (PHP)
 $payload = [
-    "amount" => $AMOUNT,
-    "offer_hash" => $OFFER_HASH,
+    "amount" => 2163,
+    "offer_hash" => "Z-19RN101IFI26",
     "payment_method" => "pix",
+
     "customer" => [
-        "name" => $name,
-        "email" => $email,
-        "phone_number" => $phone,
-        "document" => $doc
+        "name" => $_GET["name"] ?? "Cliente Pix",
+        "email" => $_GET["email"] ?? "cliente@email.com",
+        "phone_number" => $_GET["phone"] ?? "11999999999",
+        "document" => $_GET["document"] ?? "00000000000"
     ],
+
     "cart" => [
         [
-            "product_hash" => $PRODUCT_HASH,
-            "title" => $PRODUCT_NAME,
-            "price" => $AMOUNT,
+            "product_hash" => "mstjydnuad",
+            "title" => "Seguro Prestamista",
+            "price" => 2163,
             "quantity" => 1,
             "operation_type" => 1,
             "tangible" => false
         ]
-    ],
-    "expire_in_days" => 1,
-    "transaction_origin" => "api",
-    "tracking" => [
-        "utm_source" => $utm_source,
-        "utm_medium" => $utm_medium,
-        "utm_campaign" => $utm_campaign,
-        "utm_term" => $utm_term,
-        "utm_content" => $utm_content
     ]
 ];
 
-// =====================
-// REQUEST PARA PLUMIFY
-// =====================
-$endpoint = "https://api.plumify.com.br/checkout";
-
-$ch = curl_init($endpoint);
+$ch = curl_init($url);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
-        "Authorization: Bearer H0uDeO6yO5F2RFGVSrloOF2KNB3dj7NSKDi9fX7qIf7Cq1YEiv9vITWE8QSu",
-        "Content-Type: application/json"
-    ],
-    CURLOPT_POSTFIELDS => json_encode($payload)
-]);
+        "Content-Type: application/json",
+        "Accept: application/json"
     ],
     CURLOPT_POSTFIELDS => json_encode($payload),
-    CURLOPT_TIMEOUT => 10
 ]);
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
 
-if ($httpCode >= 400 || !$response) {
-    http_response_code(500);
+if ($response === false) {
     echo json_encode([
-        "erro" => "Falha ao chamar Plumify",
-        "http_code" => $httpCode,
-        "response_raw" => $response
+        "erro" => "Erro no cURL",
+        "curl_error" => curl_error($ch)
     ]);
     exit;
 }
 
-$data = json_decode($response, true);
+curl_close($ch);
 
-// =====================
-// RETORNO LIMPO PRO SENDBOT
-// =====================
+$result = json_decode($response, true);
+
+// Se deu erro na API
+if ($httpCode < 200 || $httpCode >= 300) {
+    echo json_encode([
+        "erro" => "Erro Plumify",
+        "http_code" => $httpCode,
+        "response" => $result
+    ]);
+    exit;
+}
+
+/*
+  ⬇️ RETORNAMOS APENAS O PIX (Sendbot friendly)
+*/
 echo json_encode([
-    "pix_copia_e_cola" => $data['data']['pix']['code'] ?? null,
-    "qr_code_base64"   => $data['data']['pix']['qr_code'] ?? null,
-    "transaction_id"  => $data['data']['id'] ?? null
+    "pix_qr_code" => $result["data"]["pix"]["qr_code"] ?? null,
+    "pix_copia_e_cola" => $result["data"]["pix"]["code"] ?? null,
+    "transaction_id" => $result["data"]["id"] ?? null
 ]);
