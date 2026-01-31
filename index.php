@@ -13,10 +13,10 @@ $offer_hash = "Z-19RN101IFI26";
 $product_hash = "mstjydnuad";
 
 $customer = [
-    "name" => $_REQUEST["name"] ?? "Joao Silva",
-    "email" => $_REQUEST["email"] ?? "joao@email.com",
-    "phone_number" => $_REQUEST["phone"] ?? "11999999999",
-    "document" => $_REQUEST["document"] ?? "45780681880"
+    "name" => $_REQUEST["name"] ?? null,
+    "email" => $_REQUEST["email"] ?? null,
+    "phone_number" => $_REQUEST["phone_number"] ?? null,
+    "document" => $_REQUEST["document"] ?? null
 ];
 
 $tracking = [
