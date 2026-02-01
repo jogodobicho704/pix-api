@@ -4,8 +4,10 @@ header("Content-Type: application/json");
 // ================= CONFIG =================
 $PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN");
 $API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
-$META_PIXEL_ID = "1607272920288929";
-$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQi1p1qTCpAuMuuoFxPZBalfAmbzlAEeaDRq7PPZAvqZCG8ewZCrEKjnQZA70GUFTsZCAA7mMQqAyv1PtJYyrtrtp2XQ31Cn5I7JPZCJ9BttVg3zjB0vEl6duLdom5NT4Nn8utHQZCPXcAZCSinGeZAcgiZBJpE3QcrkqLibQU8p3uccvZB2mdeuZBIgZDZD"; // ⚠️ nunca exponha token em produção
+
+// META – DATASET CONFIRMADO
+$META_DATASET_ID = "1607272920288929";
+$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQuw9xZCtVqBAfpn91GuZAcqGDRJ2lmyiGntn500xXM8NomL7kikRpM63U8Y7SoDRkqxB1LZCkKVaeoxPifiKFNKK1aVZAdoSFydAYJXE596JvBIHhAyQrZBg3nHhmCZCJT8RPyswXxKrhIX46JYQjteaW8lcZCBDxzZBdEKsUKWMdY44dpYTeAZDZD";
 
 // ================= INPUT =================
 $amount = 2163; // centavos
@@ -13,10 +15,10 @@ $offer_hash = "Z-19RN101IFI26";
 $product_hash = "mstjydnuad";
 
 $customer = [
-    "name" => $_REQUEST["name"] ?? null,
-    "email" => $_REQUEST["email"] ?? null,
+    "name"         => $_REQUEST["name"] ?? null,
+    "email"        => $_REQUEST["email"] ?? null,
     "phone_number" => $_REQUEST["phone_number"] ?? null,
-    "document" => $_REQUEST["document"] ?? null
+    "document"     => $_REQUEST["document"] ?? null
 ];
 
 $tracking = [
@@ -60,8 +62,8 @@ curl_setopt_array($ch, [
     CURLOPT_POSTFIELDS => json_encode($payload)
 ]);
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$response  = curl_exec($ch);
+$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
 
@@ -84,21 +86,21 @@ if (!isset($result["id"], $result["payment_status"])) {
     exit;
 }
 
-// ================= EXTRAÇÃO PIX =================
+// ================= PIX =================
 $pix_copia_e_cola = $result["pix"]["pix_qr_code"] ?? null;
-$pix_qr_code = $result["pix"]["pix_url"] ?? null;
-$pix_base64 = $result["pix"]["qr_code_base64"] ?? null;
+$pix_qr_code     = $result["pix"]["pix_url"] ?? null;
+$pix_base64      = $result["pix"]["qr_code_base64"] ?? null;
 
 // ================= RESPOSTA =================
 $responseData = [
-    "transaction_id" => $result["id"],
-    "payment_status" => $result["payment_status"],
+    "transaction_id"   => $result["id"],
+    "payment_status"   => $result["payment_status"],
     "pix_copia_e_cola" => $pix_copia_e_cola,
-    "pix_qr_code" => $pix_qr_code,
-    "pix_base64" => $pix_base64
+    "pix_qr_code"      => $pix_qr_code,
+    "pix_base64"       => $pix_base64
 ];
 
-// ================= META CAPI =================
+// ================= META CAPI (DATASET) =================
 if ($result["payment_status"] === "paid") {
 
     $user_data = [];
@@ -119,14 +121,14 @@ if ($result["payment_status"] === "paid") {
     $capi_payload = [
         "data" => [
             [
-                "event_name" => "Purchase",
-                "event_time" => time(),
-                "event_id" => "pix_" . $result["id"],
+                "event_name"    => "Purchase",
+                "event_time"    => time(),
+                "event_id"      => "pix_" . $result["id"],
                 "action_source" => "website",
-                "user_data" => $user_data,
-                "custom_data" => [
+                "user_data"     => $user_data,
+                "custom_data"   => [
                     "currency" => "BRL",
-                    "value" => $amount / 100
+                    "value"    => $amount / 100
                 ]
             ]
         ]
@@ -134,7 +136,7 @@ if ($result["payment_status"] === "paid") {
 
     $chMeta = curl_init();
     curl_setopt_array($chMeta, [
-        CURLOPT_URL => "https://graph.facebook.com/v18.0/{$META_PIXEL_ID}/events?access_token={$META_ACCESS_TOKEN}",
+        CURLOPT_URL => "https://graph.facebook.com/v18.0/{$META_DATASET_ID}/events?access_token={$META_ACCESS_TOKEN}",
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
@@ -142,16 +144,16 @@ if ($result["payment_status"] === "paid") {
     ]);
 
     $meta_response = curl_exec($chMeta);
-    $meta_http = curl_getinfo($chMeta, CURLINFO_HTTP_CODE);
-    $meta_error = curl_error($chMeta);
+    $meta_http     = curl_getinfo($chMeta, CURLINFO_HTTP_CODE);
+    $meta_error    = curl_error($chMeta);
     curl_close($chMeta);
 
-    $responseData["meta_http"] = $meta_http;
+    $responseData["meta_http"]     = $meta_http;
     $responseData["meta_response"] = json_decode($meta_response, true);
-    $responseData["meta_error"] = $meta_error;
+    $responseData["meta_error"]    = $meta_error;
 }
 
-// ================= RETORNO =================
+// ================= RETORNO FINAL =================
 echo json_encode([
     "statusCode" => 200,
     "data" => $responseData
