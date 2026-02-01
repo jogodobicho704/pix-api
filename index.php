@@ -4,8 +4,8 @@ header("Content-Type: application/json");
 // ================= CONFIG =================
 $PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN");
 $API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
-$META_PIXEL_ID = "1585550522686553";
-$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQpPvlmXuM5KUghDBjBQu1ON17tCYpM0n5eQT0V7aKGZCSCGmCY9eoKy9jYkzVuN4NZC0BhGn4eYOmyzO9IFZBaE0x89Gvqhpl2UpjG5bbwGLRwsVNze9ohRiXWlj0n5VX2uRnCqZA2NFrY6b9ikmOAQBVz3Paa6wZCWHrMuUlYuAUiQr4bgZDZD"; // ⚠️ nunca exponha token em produção
+$META_PIXEL_ID = "1607272920288929";
+$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQi1p1qTCpAuMuuoFxPZBalfAmbzlAEeaDRq7PPZAvqZCG8ewZCrEKjnQZA70GUFTsZCAA7mMQqAyv1PtJYyrtrtp2XQ31Cn5I7JPZCJ9BttVg3zjB0vEl6duLdom5NT4Nn8utHQZCPXcAZCSinGeZAcgiZBJpE3QcrkqLibQU8p3uccvZB2mdeuZBIgZDZD"; // ⚠️ nunca exponha token em produção
 
 // ================= INPUT =================
 $amount = 2163; // centavos
