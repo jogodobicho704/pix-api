@@ -5,7 +5,7 @@ header("Content-Type: application/json");
 $PLUMIFY_TOKEN = getenv("PLUMIFY_TOKEN");
 $API_URL = "https://api.plumify.com.br/api/public/v1/transactions";
 $META_PIXEL_ID = "1585550522686553";
-$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQjzjnKheWdamhmwPCo1CNueZAULNegkQbXEDYK1lJYHctFxJO7NiN5zVB52lAeghqBYgtXI7TDqVvp7P9l2S6wiLsAY27ZC1FkoubuFZCVKj2dEZCWeC9y8JyCFqO6Qgcl8N5NwjKbGaaJSOs8F0ooXyz6y53kZAiBWizvCA6nezbnPjf5AZDZD";
+$META_ACCESS_TOKEN = "EAARFzDZBZCLZBgBQpPvlmXuM5KUghDBjBQu1ON17tCYpM0n5eQT0V7aKGZCSCGmCY9eoKy9jYkzVuN4NZC0BhGn4eYOmyzO9IFZBaE0x89Gvqhpl2UpjG5bbwGLRwsVNze9ohRiXWlj0n5VX2uRnCqZA2NFrY6b9ikmOAQBVz3Paa6wZCWHrMuUlYuAUiQr4bgZDZD"; // ⚠️ nunca exponha token em produção
 
 // ================= INPUT =================
 $amount = 2163; // centavos
@@ -24,7 +24,8 @@ $tracking = [
     "utm_campaign" => $_REQUEST["utm_campaign"] ?? null,
     "utm_medium"   => $_REQUEST["utm_medium"] ?? null,
     "utm_term"     => $_REQUEST["utm_term"] ?? null,
-    "utm_content"  => $_REQUEST["utm_content"] ?? null
+    "utm_content"  => $_REQUEST["utm_content"] ?? null,
+    "fbclid"       => $_REQUEST["fbclid"] ?? null
 ];
 
 // ================= PAYLOAD PLUMIFY =================
@@ -68,15 +69,14 @@ if ($httpCode >= 400 || !$response) {
     echo json_encode([
         "erro" => "Falha ao chamar Plumify",
         "http_code" => $httpCode,
-        "curl_error" => $curlError,
-        "response_raw" => $response
+        "curl_error" => $curlError
     ]);
     exit;
 }
 
 $result = json_decode($response, true);
 
-if (!isset($result["id"]) || !isset($result["payment_status"])) {
+if (!isset($result["id"], $result["payment_status"])) {
     echo json_encode([
         "erro" => "Transação não criada",
         "debug" => $result
@@ -89,7 +89,7 @@ $pix_copia_e_cola = $result["pix"]["pix_qr_code"] ?? null;
 $pix_qr_code = $result["pix"]["pix_url"] ?? null;
 $pix_base64 = $result["pix"]["qr_code_base64"] ?? null;
 
-// ================= RESPOSTA PLUMIFY =================
+// ================= RESPOSTA =================
 $responseData = [
     "transaction_id" => $result["id"],
     "payment_status" => $result["payment_status"],
@@ -98,26 +98,35 @@ $responseData = [
     "pix_base64" => $pix_base64
 ];
 
-// ================= DISPARO META CAPI =================
+// ================= META CAPI =================
 if ($result["payment_status"] === "paid") {
-    $user_data = [
-        "em" => hash('sha256', strtolower(trim($customer["email"]))),
-        "ph" => hash('sha256', preg_replace('/\D/', '', $customer["phone_number"]))
-    ];
+
+    $user_data = [];
+
+    if (!empty($customer["email"])) {
+        $user_data["em"] = hash('sha256', strtolower(trim($customer["email"])));
+    }
+
+    if (!empty($customer["phone_number"])) {
+        $user_data["ph"] = hash('sha256', preg_replace('/\D/', '', $customer["phone_number"]));
+    }
+
+    $user_data["client_ip_address"] = $_SERVER['REMOTE_ADDR'] ?? null;
+    $user_data["client_user_agent"] = $_SERVER['HTTP_USER_AGENT'] ?? null;
+    $user_data["fbp"] = $_COOKIE['_fbp'] ?? null;
+    $user_data["fbc"] = $_COOKIE['_fbc'] ?? null;
 
     $capi_payload = [
         "data" => [
             [
                 "event_name" => "Purchase",
                 "event_time" => time(),
-                "event_id" => $result["id"],
+                "event_id" => "pix_" . $result["id"],
+                "action_source" => "website",
                 "user_data" => $user_data,
                 "custom_data" => [
                     "currency" => "BRL",
-                    "value" => $amount / 100,
-                    "pix_qr_code" => $pix_qr_code,
-                    "pix_copia_e_cola" => $pix_copia_e_cola,
-                    "utm_source" => $tracking['utm_source']
+                    "value" => $amount / 100
                 ]
             ]
         ]
@@ -125,7 +134,7 @@ if ($result["payment_status"] === "paid") {
 
     $chMeta = curl_init();
     curl_setopt_array($chMeta, [
-        CURLOPT_URL => "https://graph.facebook.com/v15.0/{$META_PIXEL_ID}/events?access_token={$META_ACCESS_TOKEN}",
+        CURLOPT_URL => "https://graph.facebook.com/v18.0/{$META_PIXEL_ID}/events?access_token={$META_ACCESS_TOKEN}",
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
@@ -137,9 +146,9 @@ if ($result["payment_status"] === "paid") {
     $meta_error = curl_error($chMeta);
     curl_close($chMeta);
 
-    $responseData["meta_capi_http"] = $meta_http;
-    $responseData["meta_capi_response"] = $meta_response;
-    $responseData["meta_curl_error"] = $meta_error;
+    $responseData["meta_http"] = $meta_http;
+    $responseData["meta_response"] = json_decode($meta_response, true);
+    $responseData["meta_error"] = $meta_error;
 }
 
 // ================= RETORNO =================
