@@ -113,6 +113,10 @@ if ($result["payment_status"] === "paid") {
         $user_data["ph"] = hash('sha256', preg_replace('/\D/', '', $customer["phone_number"]));
     }
 
+    if (!empty($tracking["fbclid"])) {
+        $user_data["external_id"] = hash('sha256', $tracking["fbclid"]);
+    }
+
     $user_data["client_ip_address"] = $_SERVER['REMOTE_ADDR'] ?? null;
     $user_data["client_user_agent"] = $_SERVER['HTTP_USER_AGENT'] ?? null;
     $user_data["fbp"] = $_COOKIE['_fbp'] ?? null;
@@ -127,8 +131,13 @@ if ($result["payment_status"] === "paid") {
                 "action_source" => "website",
                 "user_data"     => $user_data,
                 "custom_data"   => [
-                    "currency" => "BRL",
-                    "value"    => $amount / 100
+                    "currency"      => "BRL",
+                    "value"         => $amount / 100,
+                    "utm_source"    => $tracking["utm_source"],
+                    "utm_medium"    => $tracking["utm_medium"],
+                    "utm_campaign"  => $tracking["utm_campaign"],
+                    "utm_content"   => $tracking["utm_content"],
+                    "utm_term"      => $tracking["utm_term"]
                 ]
             ]
         ]
@@ -159,3 +168,4 @@ echo json_encode([
     "data" => $responseData
 ]);
 exit;
+?>
