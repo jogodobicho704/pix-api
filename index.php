@@ -1,4 +1,7 @@
 <?php
+// ================= EVENT ID ÚNICO =================
+$event_id = 'purchase_' . uniqid();
+
 header("Content-Type: application/json");
 
 // ================= CONFIG =================
@@ -94,6 +97,7 @@ $pix_base64      = $result["pix"]["qr_code_base64"] ?? null;
 // ================= RESPOSTA =================
 $responseData = [
     "transaction_id"   => $result["id"],
+    "event_id"         => $event_id,
     "payment_status"   => $result["payment_status"],
     "pix_copia_e_cola" => $pix_copia_e_cola,
     "pix_qr_code"      => $pix_qr_code,
@@ -127,7 +131,7 @@ if ($result["payment_status"] === "paid") {
             [
                 "event_name"    => "Purchase",
                 "event_time"    => time(),
-                "event_id"      => "pix_" . $result["id"],
+                "event_id" => $event_id,
                 "action_source" => "website",
                 "user_data"     => $user_data,
                 "custom_data"   => [
